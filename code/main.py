@@ -12,6 +12,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'AI'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'UI'))
 
+import time
 import cv2
 import numpy as np
 from collections import deque
@@ -19,8 +20,8 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-from gesture_recognition import GestureClassifier, draw_hand_skeleton, initialize_detector
-from presentation_controller import PresentationController
+from AI.gesture_recognition import GestureClassifier, draw_hand_skeleton, initialize_detector
+from UI.presentation_controller import PresentationController
 from gesture_controller import GestureController
 
 
