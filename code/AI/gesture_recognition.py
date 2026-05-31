@@ -159,9 +159,9 @@ class GestureClassifier:
         self.current_gesture = "None"
 
 
-def initialize_detector():
+def initialize_detector(model_asset_path='hand_landmarker.task'):
     """Инициализация детектора рук MediaPipe (TASK-1.2)."""
-    base_options = python.BaseOptions(model_asset_path='hand_landmarker.task')
+    base_options = python.BaseOptions(model_asset_path=model_asset_path)
     options = vision.HandLandmarkerOptions(
         base_options=base_options,
         num_hands=2,

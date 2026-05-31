@@ -23,41 +23,38 @@ class GestureController:
     - Предоставление статуса для визуальной обратной связи
     """
     
-    # Маппинг жестов на названия действий
-    GESTURE_TO_ACTION: Dict[str, str] = {
-        "One": "next_slide",      # Указательный палец - следующий слайд
-        "Fist": "prev_slide",     # Кулак - предыдущий слайд
-        "Open": "start_presentation",  # Открытая ладонь - запуск презентации
-        "Peace": "end_presentation"    # Знак мира - завершение презентации
+    DEFAULT_GESTURE_TO_ACTION: Dict[str, str] = {
+        "One": "next_slide",
+        "Fist": "prev_slide",
+        "Open": "start_presentation",
+        "Peace": "end_presentation",
     }
-    
-    # Время блокировки повторного срабатывания того же жеста (в секундах)
+
     COOLDOWN_SECONDS = 5.0
-    
-    def __init__(self, presentation_controller):
+
+    def __init__(self, presentation_controller, gesture_mapping: Dict[str, str] | None = None,
+                 cooldown_seconds: float = 5.0):
         """
         Инициализация контроллера жестов.
-        
+
         Args:
             presentation_controller: Экземпляр PresentationController для выполнения действий
+            gesture_mapping: Маппинг жестов на действия (из config.json)
+            cooldown_seconds: Время блокировки повторного срабатывания
         """
         self.presentation_controller = presentation_controller
-        
-        # Словарь для хранения времени последнего срабатывания каждого действия
-        # Формат: {action_name: timestamp}
+        self.GESTURE_TO_ACTION = dict(gesture_mapping or self.DEFAULT_GESTURE_TO_ACTION)
+        self.COOLDOWN_SECONDS = cooldown_seconds
+        self.enabled = False
+
         self._last_triggered: Dict[str, float] = {}
-        
-        # Счетчики статистики
         self._gesture_counts: Dict[str, int] = {gesture: 0 for gesture in self.GESTURE_TO_ACTION.keys()}
         self._total_triggers = 0
         self._blocked_triggers = 0
-        
-        # Текущий активный жест (для отображения)
         self.current_gesture = "None"
-        
-        # Время последнего обновления (для расчета cooldown)
+        self.last_result: Dict = {}
         self._last_update_time = time.time()
-        
+
         print("[GestureController] Инициализирован")
         print(f"[GestureController] Маппинг жестов: {self.GESTURE_TO_ACTION}")
         print(f"[GestureController] Cooldown: {self.COOLDOWN_SECONDS} сек")
@@ -122,6 +119,21 @@ class GestureController:
         else:
             print(f"[GestureController] Ошибка: действие '{action}' не найдено")
     
+    def update_mapping(self, gesture_mapping: Dict[str, str]) -> None:
+        """Обновление маппинга жестов без перезапуска системы."""
+        self.GESTURE_TO_ACTION = dict(gesture_mapping)
+        for gesture in self.GESTURE_TO_ACTION:
+            self._gesture_counts.setdefault(gesture, 0)
+        print(f"[GestureController] Маппинг обновлён: {self.GESTURE_TO_ACTION}")
+
+    def set_cooldown(self, seconds: float) -> None:
+        self.COOLDOWN_SECONDS = seconds
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        state = "включено" if enabled else "выключено"
+        print(f"[GestureController] Слежение {state}")
+
     def process_gesture(self, gesture: str) -> Dict:
         """
         Обработка распознанного жеста.
@@ -145,15 +157,20 @@ class GestureController:
             'action': None,
             'blocked': False,
             'cooldown_remaining': 0.0,
-            'message': ''
+            'message': '',
+            'tracking_enabled': self.enabled,
         }
-        
-        # Получаем действие для жеста
+
+        if not self.enabled:
+            result['message'] = 'Слежение остановлено'
+            self.last_result = result
+            return result
+
         action = self._get_action_for_gesture(gesture)
         
         if action is None:
-            # Жест не распознан или не имеет привязанного действия
             result['message'] = f"Жест '{gesture}' не имеет привязанного действия"
+            self.last_result = result
             return result
         
         # Проверяем блокировку
@@ -163,8 +180,9 @@ class GestureController:
             result['cooldown_remaining'] = remaining
             result['message'] = f"Действие '{action}' заблокировано ({remaining:.1f} сек)"
             self._blocked_triggers += 1
+            self.last_result = result
             return result
-        
+
         # Выполняем действие
         self._execute_action(action)
         result['triggered'] = True
@@ -175,6 +193,7 @@ class GestureController:
         self._gesture_counts[gesture] = self._gesture_counts.get(gesture, 0) + 1
         
         print(f"[GestureController] {result['message']}")
+        self.last_result = result
         return result
     
     def get_status(self) -> Dict:
