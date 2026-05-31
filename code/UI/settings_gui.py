@@ -36,8 +36,8 @@ class SettingsGUI:
 
         self.root = tk.Tk()
         self.root.title("Управление презентацией жестами")
-        self.root.geometry("520x680")
-        self.root.minsize(480, 620)
+        self.root.geometry("520x780")
+        self.root.minsize(480, 700)
         self.root.protocol("WM_DELETE_WINDOW", self._handle_close)
 
         self._build_ui()
@@ -72,27 +72,41 @@ class SettingsGUI:
 
         ttk.Button(control_frame, text="Сброс состояний", command=self._reset_states).pack(side=tk.LEFT)
 
-        # --- Маппинг жестов ---
+        # --- Маппинг жестов (прокручиваемый список) ---
         mapping_frame = ttk.LabelFrame(main, text="Привязка жестов к действиям", padding=10)
         mapping_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+
+        canvas = tk.Canvas(mapping_frame, highlightthickness=0, height=280)
+        scrollbar = ttk.Scrollbar(mapping_frame, orient=tk.VERTICAL, command=canvas.yview)
+        scroll_inner = ttk.Frame(canvas)
+
+        scroll_inner.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.create_window((0, 0), window=scroll_inner, anchor=tk.NW)
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         action_values = [f"{ACTION_LABELS[a]} ({a})" for a in AVAILABLE_ACTIONS]
 
         for i, gesture in enumerate(AVAILABLE_GESTURES):
-            ttk.Label(mapping_frame, text=gesture, width=10).grid(row=i, column=0, sticky=tk.W, pady=3)
+            ttk.Label(scroll_inner, text=gesture, width=12).grid(row=i, column=0, sticky=tk.W, pady=3)
 
             var = tk.StringVar()
             combo = ttk.Combobox(
-                mapping_frame,
+                scroll_inner,
                 textvariable=var,
                 values=action_values,
                 state="readonly",
-                width=36,
+                width=34,
             )
             combo.grid(row=i, column=1, sticky=tk.EW, padx=(8, 0), pady=3)
             self._gesture_vars[gesture] = var
 
-        mapping_frame.columnconfigure(1, weight=1)
+        scroll_inner.columnconfigure(1, weight=1)
 
         # --- Параметры ---
         params_frame = ttk.LabelFrame(main, text="Параметры", padding=10)
@@ -106,6 +120,9 @@ class SettingsGUI:
 
         self.confidence_var = tk.DoubleVar(value=0.7)
         self._add_spinbox_row(params_frame, "Порог уверенности:", self.confidence_var, 0.1, 1.0, 0.05, 2)
+
+        self.min_hold_var = tk.IntVar(value=3)
+        self._add_spinbox_row(params_frame, "Мин. кадров удержания:", self.min_hold_var, 1, 10, 1, 3)
 
         # --- Кнопки ---
         btn_frame = ttk.Frame(main)
@@ -144,6 +161,7 @@ class SettingsGUI:
         self.cooldown_var.set(cfg.get("cooldown_seconds", 5.0))
         self.smoothing_var.set(cfg.get("smoothing_window", 5))
         self.confidence_var.set(cfg.get("confidence_threshold", 0.7))
+        self.min_hold_var.set(cfg.get("min_hold_frames", 3))
 
     def _collect_config(self) -> Dict:
         gesture_mapping = {}
@@ -157,6 +175,7 @@ class SettingsGUI:
             "cooldown_seconds": self.cooldown_var.get(),
             "smoothing_window": self.smoothing_var.get(),
             "confidence_threshold": self.confidence_var.get(),
+            "min_hold_frames": self.min_hold_var.get(),
             "camera_index": self.config_manager.config.get("camera_index", 0),
         }
 

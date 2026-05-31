@@ -21,7 +21,7 @@ import mediapipe as mp
 from AI.gesture_recognition import GestureClassifier, draw_hand_skeleton, initialize_detector
 from UI.presentation_controller import PresentationController
 from UI.settings_gui import SettingsGUI
-from config_manager import ConfigManager, get_project_root
+from config_manager import ConfigManager, get_resource_path
 from gesture_controller import GestureController
 
 
@@ -41,9 +41,10 @@ class GesturePresentationSystem:
         self.classifier = GestureClassifier(
             smoothing_window=cfg["smoothing_window"],
             confidence_threshold=cfg["confidence_threshold"],
+            min_hold_frames=cfg.get("min_hold_frames", 3),
         )
 
-        model_path = os.path.join(get_project_root(), "hand_landmarker.task")
+        model_path = get_resource_path("hand_landmarker.task")
         self.detector = initialize_detector(model_path)
 
         self._cleaned = False
@@ -78,6 +79,7 @@ class GesturePresentationSystem:
 
         self.classifier.smoothing_window = int(new_config.get("smoothing_window", 5))
         self.classifier.confidence_threshold = float(new_config.get("confidence_threshold", 0.7))
+        self.classifier.min_hold_frames = int(new_config.get("min_hold_frames", 3))
         self.classifier.gesture_buffer = deque(maxlen=self.classifier.smoothing_window)
 
     def set_tracking(self, enabled: bool) -> None:
@@ -115,12 +117,13 @@ class GesturePresentationSystem:
             if detection_result.hand_landmarks:
                 for idx, hand_landmarks in enumerate(detection_result.hand_landmarks):
                     draw_hand_skeleton(frame, hand_landmarks, h, w)
-                    gesture = self.classifier.get_stable_gesture(hand_landmarks)
-                    result = self.gesture_controller.process_gesture(gesture)
 
-                    handedness = ""
+                    handedness = "Right"
                     if detection_result.handedness and idx < len(detection_result.handedness):
                         handedness = detection_result.handedness[idx][0].display_name
+
+                    gesture = self.classifier.get_stable_gesture(hand_landmarks, handedness)
+                    result = self.gesture_controller.process_gesture(gesture)
 
                     label = f"{gesture} ({handedness})"
                     cv2.putText(frame, label, (10, 30 + idx * 40),

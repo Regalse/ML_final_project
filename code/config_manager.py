@@ -1,18 +1,21 @@
 """
-Менеджер конфигурации приложения (Этап 4, TASK-4.1).
+Менеджер конфигурации приложения (Этап 4–5).
 
 Загрузка и сохранение настроек из config.json.
+Поддержка запуска из исходников и из PyInstaller .exe.
 """
 
 import json
 import os
+import sys
 from copy import deepcopy
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 AVAILABLE_GESTURES = [
     "One", "Fist", "Open", "Peace",
     "Pinky", "Shaka", "Three", "Four",
+    "ThumbsUp", "ThumbsDown", "OK", "Rock",
 ]
 
 AVAILABLE_ACTIONS = [
@@ -41,8 +44,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "cooldown_seconds": 5.0,
     "smoothing_window": 5,
     "confidence_threshold": 0.7,
+    "min_hold_frames": 3,
     "camera_index": 0,
 }
+
+
+def is_frozen() -> bool:
+    return getattr(sys, "frozen", False)
 
 
 def get_project_root() -> str:
@@ -50,14 +58,29 @@ def get_project_root() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def get_app_dir() -> str:
+    """Директория приложения: рядом с .exe или корень проекта."""
+    if is_frozen():
+        return os.path.dirname(sys.executable)
+    return get_project_root()
+
+
+def get_resource_path(filename: str) -> str:
+    """Путь к встроенному ресурсу (модель MediaPipe)."""
+    if is_frozen():
+        return os.path.join(sys._MEIPASS, filename)
+    return os.path.join(get_project_root(), filename)
+
+
 def get_config_path() -> str:
-    return os.path.join(get_project_root(), "config.json")
+    """config.json хранится рядом с .exe или в корне проекта."""
+    return os.path.join(get_app_dir(), "config.json")
 
 
 class ConfigManager:
     """Загрузка, валидация и сохранение конфигурации."""
 
-    def __init__(self, config_path: str | None = None):
+    def __init__(self, config_path: Optional[str] = None):
         self.config_path = config_path or get_config_path()
         self._config = deepcopy(DEFAULT_CONFIG)
         self.load()
@@ -77,7 +100,9 @@ class ConfigManager:
         return self._config
 
     def save(self) -> None:
-        os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+        config_dir = os.path.dirname(self.config_path)
+        if config_dir:
+            os.makedirs(config_dir, exist_ok=True)
         with open(self.config_path, "w", encoding="utf-8") as f:
             json.dump(self._config, f, ensure_ascii=False, indent=2)
 
@@ -102,5 +127,6 @@ class ConfigManager:
         merged["cooldown_seconds"] = float(merged["cooldown_seconds"])
         merged["smoothing_window"] = int(merged["smoothing_window"])
         merged["confidence_threshold"] = float(merged["confidence_threshold"])
+        merged["min_hold_frames"] = int(merged.get("min_hold_frames", 3))
         merged["camera_index"] = int(merged["camera_index"])
         return merged
